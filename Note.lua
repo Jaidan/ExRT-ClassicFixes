@@ -1017,7 +1017,7 @@ function module.options:Load()
 		self.html:SetShadowColor(0, 0, 0, 1)
 	end
 	self.raidnames = {}
-	for i=1,35 do
+	for i=1,40 do
 		self.raidnames[i] = CreateFrame("Button", nil,self.tab.tabs[1])
 		self.raidnames[i]:SetSize(105,14)
 		self.raidnames[i]:SetPoint("TOPLEFT", 5+math.floor((i-1)/5)*108,-55-14*((i-1)%5))
@@ -1719,7 +1719,7 @@ function module.main:GROUP_ROSTER_UPDATE()
 	for i=1,8 do gruevent[i] = 0 end
 	if IsInRaid() then
 		local n = GetNumGroupMembers() or 0
-		local gMax = 7
+		local gMax = 8
 		for i=1,n do
 			local name,_,subgroup,_,_,class = GetRaidRosterInfo(i)
 			if name and subgroup <= gMax and gruevent[subgroup] then
