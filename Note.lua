@@ -803,7 +803,7 @@ function module.options:Load()
 			text = text:gsub("||c........","")
 			text = text:gsub("||r","")
 			text = text:gsub("||T.-:0||t ","")
-			text = text:gsub("%b{}","")
+			--text = text:gsub("%b{}","")
 			
 			local lines = {strsplit("\n", text)}
 			for i=1,#lines do
