@@ -41,6 +41,7 @@ module.db.tableFlask =  not ExRT.isClassic and {
 	[16326]=true,	[16325]=true,	[15233]=true,	[15279]=true,	[5665]=true,
 	[17549]=true,	[17543]=true,	[17544]=true,	[17546]=true,	[17548]=true,
 	[17545]=true,	[17537]=true,
+	[11334]=true,
 }
 module.db.tableFlask_headers = {0,238,360}
 module.db.tablePotion = {
@@ -160,7 +161,7 @@ module.db.RaidCheckReadyCheckTable = {}
 module.db.RaidCheckReadyPPLNum = 0
 module.db.RaidCheckReadyCheckHideSchedule = nil
 
-module.db.tableRunes = {[224001]=15,[270058]=60}
+module.db.tableRunes = {[224001]=15,[270058]=60,[317065]=60,}
 
 module.db.minFoodLevelToActual = {
 	[100] = 100,
@@ -804,7 +805,7 @@ function module.options:Load()
 	self.hsToChat = ELib:Button(self,L.raidcheckHSLastPullToChat):Size(230,20):Point("LEFT",self.hs,"RIGHT",71,0):OnClick(function() GetHs(1) end):Run(function(s,a) if a then s:Disable() end end,not VExRT.RaidCheck.PotionCheck)
 	
 	self.optReadyCheckFrame = CreateFrame("Frame",nil,self)
-	self.optReadyCheckFrame:SetSize(650,125)
+	self.optReadyCheckFrame:SetSize(650,145)
 	self.optReadyCheckFrame:SetBackdrop({bgFile = "Interface/Tooltips/UI-Tooltip-Background",edgeFile = ExRT.F.defBorder,tile = false,edgeSize = 8})
 	self.optReadyCheckFrame:SetBackdropColor(0,0,0,0.3)
 	self.optReadyCheckFrame:SetBackdropBorderColor(.24,.25,.30,0)
@@ -856,6 +857,14 @@ function module.options:Load()
 	end) 
 	
 	self.htmlReadyCheck1 = ELib:Text(self.optReadyCheckFrame,L.RaidCheckReadyCheckHelp,12):Size(583,100):Point(10,-90):Top()
+
+	self.chkReadyCheckFrameEnable = ELib:Check(self.optReadyCheckFrame,L.RaidCheckSortByClass,VExRT.RaidCheck.ReadyCheckSortClass):Point(15,-120):OnClick(function(self) 
+		if self:GetChecked() then
+			VExRT.RaidCheck.ReadyCheckSortClass = true
+		else
+			VExRT.RaidCheck.ReadyCheckSortClass = nil
+		end
+	end)
 
 
 	if ExRT.isClassic then
@@ -1108,11 +1117,46 @@ module.frame:SetScript("OnHide", function(self)
 	if module.frame.anim:IsPlaying() then
 		module.frame.anim:Stop()
 	end
+	if module.frame.hideTimer then
+		module.frame.hideTimer:Cancel()
+		module.frame.hideTimer = nil
+	end
 end)
 
 do
 	local button = CreateFrame("Button",nil,module.frame)
 	module.frame.mimimize = button
+
+	function module.frame:SetMaximized()
+		button.isMinimized = nil
+
+		self.minimized:Hide()
+		self.maximized:Show()
+
+		button.NormalTexture:SetTexCoord(unpack(button.TC.up))
+		button.HighlightTexture:SetTexCoord(unpack(button.TC.up))
+		button.PushedTexture:SetTexCoord(unpack(button.TC.up))
+
+		self:SetHeight(self.SizeMaximized)
+	end
+	function module.frame:SetMinimized()
+		button.isMinimized = true
+
+		self.minimized:Show()
+		self.maximized:Hide()
+
+		button.NormalTexture:SetTexCoord(unpack(button.TC.down))
+		button.HighlightTexture:SetTexCoord(unpack(button.TC.down))
+		button.PushedTexture:SetTexCoord(unpack(button.TC.down))
+
+		self:SetHeight(module.frame.SizeMinimized)
+	end
+	function module.frame:SetMinimizedFromOptions()
+		if VExRT.RaidCheck.RCW_Mini and not button.isMinimized then
+			self:SetMinimized()
+		end
+	end
+
 	button.TC = {
 		up = {0.3125,0.375,0.5,0.625},
 		down = {0.25,0.3125,0.5,0.625},
@@ -1121,29 +1165,16 @@ do
 	button:SetSize(18,18)
 	button:SetScript("OnClick",function(self)
 		if self.isMinimized then
-			self.isMinimized = nil
+			module.frame:SetMaximized()
 
-			module.frame.minimized:Hide()
-			module.frame.maximized:Show()
-	
-			self.NormalTexture:SetTexCoord(unpack(self.TC.up))
-			self.HighlightTexture:SetTexCoord(unpack(self.TC.up))
-			self.PushedTexture:SetTexCoord(unpack(self.TC.up))
-
-			module.frame:SetHeight(module.frame.SizeMaximized)
+			VExRT.RaidCheck.RCW_Mini = false
 		else
-			self.isMinimized = true
+			module.frame:SetMinimized()
 
-			module.frame.minimized:Show()
-			module.frame.maximized:Hide()
-	
-			self.NormalTexture:SetTexCoord(unpack(self.TC.down))
-			self.HighlightTexture:SetTexCoord(unpack(self.TC.down))
-			self.PushedTexture:SetTexCoord(unpack(self.TC.down))
-
-			module.frame:SetHeight(module.frame.SizeMinimized)
+			VExRT.RaidCheck.RCW_Mini = true
 		end
 	end)
+
 	
 	button.NormalTexture = button:CreateTexture(nil,"ARTWORK")
 	button.NormalTexture:SetTexture("Interface\\AddOns\\ExRT\\media\\DiesalGUIcons16x256x128")
@@ -1490,7 +1521,7 @@ do
 end
 
 function module.frame:PrepToHide()
-	if not module.frame:IsShown() then
+	if (not module.frame:IsShown()) or (self.isManual) then
 		return
 	end
 
@@ -1559,6 +1590,7 @@ function module.frame:UpdateRoster()
 		end
 		shuffle(testRandomNames)
 	end
+	local result = {}
 	for i=1,(self.isTest and (ExRT.isClassic and 40 or math.random(0,1)*10+20) or 40) do
 		local name,subgroup,_,class,unit
 		if self.isTest then
@@ -1581,32 +1613,48 @@ function module.frame:UpdateRoster()
 			unit = "raid"..i
 		end
 		if name and subgroup <= gMax then 
-			count = count + 1
-			local line = self.lines[count]
-			if line then
-				name = ExRT.F.delUnitNameServer(name)
-
-				line.name:SetText(name)
-				line.unit = unit
-				line.unit_name = name
-				line.name:SetTextColor(1,1,1,1)
-
-				line.mini.name:SetText(name)
-				line.mini.name:SetTextColor(1,1,1,1)
-
-				local classColor = classColorsTable[class]
-				local r,g,b = classColor and classColor.r or .7,classColor and classColor.g or .7,classColor and classColor.b or .7
-
-				line.classLeft:SetGradientAlpha("HORIZONTAL",r,g,b,.4,r,g,b,0)
-
-				line:Show()
-				line.mini:Show()
-
-				line.rc_status = 1
-	
-				RCW_UnitToLine[name] = line
-				RCW_UnitToLine[line.unit] = line
+			result[#result+1] = {
+				name = ExRT.F.delUnitNameServer(name),
+				unit = unit,
+				class = class,
+			}
+		end
+	end
+	if VExRT and VExRT.RaidCheck and VExRT.RaidCheck.ReadyCheckSortClass then
+		sort(result,function(a,b)
+			if a.class == b.class then
+				return a.name < b.name
+			else
+				return a.class < b.class
 			end
+		end)
+	end
+	for i=1,#result do
+		count = count + 1
+		local line = self.lines[count]
+		if line then
+			local data = result[i]
+
+			line.name:SetText(data.name)
+			line.unit = data.unit
+			line.unit_name = data.name
+			line.name:SetTextColor(1,1,1,1)
+	
+			line.mini.name:SetText(data.name)
+			line.mini.name:SetTextColor(1,1,1,1)
+	
+			local classColor = classColorsTable[data.class]
+			local r,g,b = classColor and classColor.r or .7,classColor and classColor.g or .7,classColor and classColor.b or .7
+	
+			line.classLeft:SetGradientAlpha("HORIZONTAL",r,g,b,.4,r,g,b,0)
+	
+			line:Show()
+			line.mini:Show()
+	
+			line.rc_status = 1
+	
+			RCW_UnitToLine[data.name] = line
+			RCW_UnitToLine[line.unit] = line
 		end
 	end
 	for i=count+1,#self.lines do 
@@ -1617,8 +1665,8 @@ function module.frame:UpdateRoster()
 	end
 	self:UpdateLinesSize(count <= 20)
 	self.SizeMaximized = 55 + (count <= 20 and 20 or 14) * count
-	self.SizeMinimized = 25 + math.ceil((count-1) / 4) * 14
-	self:SetHeight(self.SizeMaximized)
+	self.SizeMinimized = 25 + math.ceil(count / 4) * 14
+	self:SetHeight(self.maximized:IsShown() and self.SizeMaximized or self.SizeMinimized)
 end
 
 function module.frame:UpdateData(onlyLine)
@@ -1740,16 +1788,16 @@ function module.frame:UpdateData(onlyLine)
 						line.vantus.text:SetTextColor(1,1,1)
 						line.vantus.text:SetText(val)
 	
-						line.vantus.tooltip = "spell:"..spellId
+						line.vantus.tooltip = i
 					elseif name and not ExRT.isClassic and vruneName and name:find(vruneName) then
 						line.vantus.texture:SetTexture(icon)
 						line.vantus.text:SetText("")
 						
-						line.vantus.tooltip = "spell:"..spellId
+						line.vantus.tooltip = i
 					elseif module.db.tableRunes[spellId] then
 						local val = module.db.tableRunes[spellId]
 						
-						line.rune.texture:SetTexture(spellId == 270058 and 840006 or icon)
+						line.rune.texture:SetTexture((spellId == 270058 or spellId == 317065) and 840006 or icon)
 						if val >= 60 then
 							line.rune.text:SetTextColor(0,1,0)
 							line.rune.text:SetText("")
@@ -1900,6 +1948,8 @@ function module:ReadyCheckWindow(starter,isTest,manual)
 
 	module.db.RaidCheckReadyCheckTime = nil
 
+	self.frame.isManual = manual
+
 	self.frame.isTest = isTest
 	if not self.frame.testData then
 		self.frame.testData = {}
@@ -1919,6 +1969,7 @@ function module:ReadyCheckWindow(starter,isTest,manual)
 	self.frame.timeLeftLine:Hide()
 
 	self.frame.mimimize:Hide()
+	self.frame:SetMaximized()
 
 	if self.frame.hideTimer then
 		self.frame.hideTimer:Cancel()
@@ -2043,6 +2094,7 @@ do
 			module.db.RaidCheckReadyCheckTime = GetTime() + (timer or 35)
 			module.frame.timeLeftLine:Start(timer or 35)
 			module.frame.mimimize:Show()
+			module.frame:SetMinimizedFromOptions()
 			module.main:READY_CHECK_CONFIRM(ExRT.F.delUnitNameServer(starter),true,isTest)
 		end
 		if not isTest then
@@ -2086,18 +2138,6 @@ function module:addonMessage(sender, prefix, type, ver, ...)
 	if prefix == "raidcheck" then
 		if sender then
 			ver = max(tonumber(ver or "0") or 0,3910)	--set min ver to 3910
-			if ver > ExRT.V then
-				if type == "FOOD" then
-					IsSendFoodByMe = nil
-				elseif type == "FLASK" then
-					IsSendFlaskByMe = nil
-				elseif type == "RUNES" then
-					IsSendRunesByMe = nil
-				elseif type == "BUFFS" then
-					IsSendBuffsByMe = nil
-				end
-				return
-			end
 			if type == "DUR" then
 				local val = ...
 				val = tonumber(val or "100") or 100
@@ -2112,6 +2152,18 @@ function module:addonMessage(sender, prefix, type, ver, ...)
 				if line then
 					module.frame:UpdateData(line)
 				end
+			end
+			if ver > ExRT.V then
+				if type == "FOOD" then
+					IsSendFoodByMe = nil
+				elseif type == "FLASK" then
+					IsSendFlaskByMe = nil
+				elseif type == "RUNES" then
+					IsSendRunesByMe = nil
+				elseif type == "BUFFS" then
+					IsSendBuffsByMe = nil
+				end
+				return
 			end
 			if ExRT.F.IsPlayerRLorOfficer(ExRT.SDB.charName) == 2 then
 				return
